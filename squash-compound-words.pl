@@ -1,4 +1,4 @@
-#!/usr/bin/perl -wn0777i
+#!/usr/bin/perl -w0777i
 
 # Parse CHAT enough to identify main tiers (including continued lines)
 # and extract words and squash compound words that have +.
@@ -9,25 +9,7 @@ use autodie;
 use utf8;
 use open qw/:std :encoding(UTF-8)/;
 
-my @chunks = split /\n(?=[\@\*\%]|$)/;
-for my $chunk (@chunks) {
-    # Ignore main tier header.
-    # Optimization since most of the time no + at all.
-    if (my ($header, $content) = $chunk =~ /\A(\*[^:]+:\t)(.+)/s) {
-        if ($content =~ /\+/) {
-            # TODO What about compounds in annotations?
-            # *CHI:   wai4+yu3 [*] [= wai+yu] .
-
-            # Identify word-like tokens. Not exact because we are
-            # not fully tokenizing. E.g. numbers in bullets get picked up.
-            # But they don't affect the final outcome because of no +.
-            #
-            # Remember to reject tabs and newlines when identifying words.
-            # Keep possible prefix &+.
-            #
-            # Disallow initial /.
-            my $newContent = $content;
-            $newContent =~ s/((?:&|&\-|&\+|0)?)
+my $wordRegex = qr/((?:&|&\-|&\+|0)?)
                           (
                                (?:
                                    \(
@@ -41,16 +23,38 @@ for my $chunk (@chunks) {
 
                                    [^\x{0015}\x{21D7}\x{2197}\x{2192}\x{2198}\x{21D8}\x{221E}\x{2261}\x{0001}\x{0002}\x{0003}\x{0004}\x{2308}\x{230A}\x{2309}\x{230B}\x{201C}\x{201D}\x{3014}\x{3015}\x{2039}\x{203A}\ &;!?\.,\x22<>{}=|*`\\%\[\]\t\n]
                                )?
-                         )/$1 . squashWord($2)/xge;
-            print $header, $newContent, "\n";
-        }
-        else {
+                         )/x;
+
+while (<>) {
+    my @chunks = split /\n(?=[\@\*\%]|$)/;
+    for my $chunk (@chunks) {
+        # Ignore main tier header.
+        # Optimization since most of the time no + at all.
+        if (my ($header, $content) = $chunk =~ /\A(\*[^:]+:\t)(.+)/s) {
+            if ($content =~ /\+/) {
+                # TODO What about compounds in annotations?
+                # *CHI:   wai4+yu3 [*] [= wai+yu] .
+
+                # Identify word-like tokens. Not exact because we are
+                # not fully tokenizing. E.g. numbers in bullets get picked up.
+                # But they don't affect the final outcome because of no +.
+                #
+                # Remember to reject tabs and newlines when identifying words.
+                # Keep possible prefix &+.
+                #
+                # Disallow initial /.
+                my $newContent = $content;
+                $newContent =~ s/$wordRegex/$1 . squashWord($2)/ge;
+                print $header, $newContent, "\n";
+            }
+            else {
+                # Unchanged.
+                print $chunk, "\n";
+            }
+        } else {
             # Unchanged.
             print $chunk, "\n";
         }
-    } else {
-        # Unchanged.
-        print $chunk, "\n";
     }
 }
 
@@ -71,7 +75,7 @@ sub squashWord {
                         $newBase;
 
                 # For visible progress.
-                print STDERR "$ARGV: [$word] -> [$changedWord]\n";
+                 print STDERR "$ARGV: [$word] -> [$changedWord]\n";
 
                 $changedWord
             }
