@@ -9,6 +9,8 @@ use autodie;
 use utf8;
 use open qw/:std :encoding(UTF-8)/;
 
+# $1: prefix
+# $2: rest
 my $wordRegex = qr/((?:&|&\-|&\+|0)?)
                           (
                                (?:
@@ -44,7 +46,7 @@ while (<>) {
                 #
                 # Disallow initial /.
                 my $newContent = $content;
-                $newContent =~ s/$wordRegex/$1 . squashWord($2)/ge;
+                $newContent =~ s/(\[[^\]]*\])|$wordRegex/squashContent($1, $2, $3)/ge;
                 print $header, $newContent, "\n";
             }
             else {
@@ -55,6 +57,24 @@ while (<>) {
             # Unchanged.
             print $chunk, "\n";
         }
+    }
+}
+
+sub squashContent {
+    my ($bracketed, $wordPrefix, $wordRest) = @_;
+    if (defined($bracketed)) {
+        # Only look into replacements.
+        if (my ($prefix, $content, $suffix) = $bracketed =~ /\A(\[:+\ *)([^\]]+)(\])\z/) {
+            my $newContent = $content;
+            $newContent =~ s/$wordRegex/$1 . squashWord($2)/ge;
+            $prefix . $newContent . $suffix
+        } else {
+            # Unchanged.
+            $bracketed
+        }
+    } else {
+        # Word.
+        $wordPrefix . squashWord($wordRest)
     }
 }
 
